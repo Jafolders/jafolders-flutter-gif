@@ -7,7 +7,7 @@
 
 library gif;
 
-import 'dart:ui';
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart';
@@ -62,7 +62,7 @@ class Gif extends StatefulWidget {
 
   final double? width;
   final double? height;
-  final TargetImageSize? targetImageSize;
+  final ui.TargetImageSize? targetImageSize;
   final Color? color;
   final BlendMode? colorBlendMode;
   final BoxFit? fit;
@@ -321,6 +321,7 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     });
   }
 
+  /// Fetches the single gif frames from storages and parses them to bytes
   static Future<Uint8List> _fetchFramesBuffer(ImageProvider provider) async {
     late final Uint8List bytes;
 
@@ -344,13 +345,36 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     return bytes;
   }
 
+  /// Resizes single ui.Images to a certain size
+  Future<ui.Image> _resizeUiImage(ui.Image image, int? targetWidth, int? targetHeight) async {
+    final dstWidth = targetWidth;
+    final dstHeight = targetHeight;
+
+    if (dstWidth == null || dstHeight == null) {
+      return image;
+    }
+
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final paint = ui.Paint();
+    final src = ui.Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final dst = ui.Rect.fromLTWH(0, 0, dstWidth.toDouble(), dstHeight.toDouble());
+
+    canvas.drawImageRect(image, src, dst, paint);
+
+    final picture = recorder.endRecording();
+    final resizedImage = await picture.toImage(dstWidth, dstHeight);
+
+    return resizedImage;
+  }
+
   /// Fetches the single gif frames and saves them into the [GifCache] of [Gif]
   Future<GifInfo> _fetchFrames(ImageProvider provider) async {
     final bytes = await compute(_fetchFramesBuffer, provider);
-    Codec codec = await instantiateImageCodec(
+
+    // Not resizing here because of issue: https://github.com/flutter/flutter/issues/143311
+    ui.Codec codec = await ui.instantiateImageCodec(
         bytes,
-        targetWidth: widget.targetImageSize?.width,
-        targetHeight: widget.targetImageSize?.height,
     );
 
     List<ImageInfo> infos = [];
@@ -358,13 +382,21 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
 
     for (int i = 0; i < codec.frameCount; i++) {
       if (!mounted) { break; }
-      FrameInfo frameInfo = await codec.getNextFrame();
-      infos.add(ImageInfo(image: frameInfo.image));
+      ui.FrameInfo frameInfo = await codec.getNextFrame();
+      final frameImage = frameInfo.image;
+      final image = await _resizeUiImage(
+          frameImage,
+          widget.targetImageSize?.width,
+          widget.targetImageSize?.height
+      );
+      infos.add(ImageInfo(image: image));
       duration += frameInfo.duration;
+      frameImage.dispose();
     }
 
     codec.dispose();
 
     return GifInfo(frames: infos, duration: duration);
   }
+
 }
