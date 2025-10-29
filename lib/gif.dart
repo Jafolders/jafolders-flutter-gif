@@ -366,7 +366,6 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
 
-    print("LMTB-TESTING!!!");
     return GifInfo(frames: infos, duration: duration);
   }
 }
