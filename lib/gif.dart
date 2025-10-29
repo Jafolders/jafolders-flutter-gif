@@ -62,6 +62,7 @@ class Gif extends StatefulWidget {
 
   final double? width;
   final double? height;
+  final TargetImageSize? targetImageSize;
   final Color? color;
   final BlendMode? colorBlendMode;
   final BoxFit? fit;
@@ -102,6 +103,7 @@ class Gif extends StatefulWidget {
     this.excludeFromSemantics = false,
     this.width,
     this.height,
+    this.targetImageSize,
     this.color,
     this.colorBlendMode,
     this.fit,
@@ -236,6 +238,10 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     if (widget.controller == null) {
       _controller.dispose();
     }
+
+    // Make sure frames are disposed.
+    _frames.forEach((e) => e.image.dispose());
+
     super.dispose();
   }
 
@@ -342,8 +348,10 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     final bytes = await compute(_fetchFramesBuffer, provider);
     final buffer = await ImmutableBuffer.fromUint8List(bytes);
     Codec codec = await PaintingBinding.instance.instantiateImageCodecWithSize(
-      buffer,
+        buffer,
+        getTargetSize: (intrinsicWidth, intrinsicHeight) => TargetImageSize(width: widget.targetImageSize?.width ?? intrinsicWidth, height: widget.targetImageSize?.height ?? intrinsicHeight)
     );
+
     List<ImageInfo> infos = [];
     Duration duration = Duration();
 
@@ -353,6 +361,11 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
       infos.add(ImageInfo(image: frameInfo.image));
       duration += frameInfo.duration;
     }
+
+    // Do some cleanup after images are processed
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+
     print("LMTB-TESTING!!!");
     return GifInfo(frames: infos, duration: duration);
   }
