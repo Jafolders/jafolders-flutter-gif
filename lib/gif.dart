@@ -241,6 +241,7 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
 
     // Make sure frames are disposed.
     _frames.forEach((e) => e.image.dispose());
+    _frames.clear();
 
     super.dispose();
   }
@@ -346,10 +347,10 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
   /// Fetches the single gif frames and saves them into the [GifCache] of [Gif]
   Future<GifInfo> _fetchFrames(ImageProvider provider) async {
     final bytes = await compute(_fetchFramesBuffer, provider);
-    final buffer = await ImmutableBuffer.fromUint8List(bytes);
-    Codec codec = await PaintingBinding.instance.instantiateImageCodecWithSize(
-        buffer,
-        getTargetSize: (intrinsicWidth, intrinsicHeight) => TargetImageSize(width: widget.targetImageSize?.width ?? intrinsicWidth, height: widget.targetImageSize?.height ?? intrinsicHeight)
+    Codec codec = await instantiateImageCodec(
+        bytes,
+        targetWidth: widget.targetImageSize?.width,
+        targetHeight: widget.targetImageSize?.height,
     );
 
     List<ImageInfo> infos = [];
@@ -362,9 +363,7 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
       duration += frameInfo.duration;
     }
 
-    // Do some cleanup after images are processed
-    PaintingBinding.instance.imageCache.clear();
-    PaintingBinding.instance.imageCache.clearLiveImages();
+    codec.dispose();
 
     return GifInfo(frames: infos, duration: duration);
   }
