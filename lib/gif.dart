@@ -314,8 +314,7 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     });
   }
 
-  /// Fetches the single gif frames and saves them into the [GifCache] of [Gif]
-  static Future<GifInfo> _fetchFrames(ImageProvider provider) async {
+  static Future<Uint8List> _fetchFramesBuffer(ImageProvider provider) async {
     late final Uint8List bytes;
 
     if (provider is NetworkImage) {
@@ -335,6 +334,12 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
       bytes = provider.bytes;
     }
 
+    return bytes;
+  }
+
+  /// Fetches the single gif frames and saves them into the [GifCache] of [Gif]
+  Future<GifInfo> _fetchFrames(ImageProvider provider) async {
+    final bytes = await compute(_fetchFramesBuffer, provider);
     final buffer = await ImmutableBuffer.fromUint8List(bytes);
     Codec codec = await PaintingBinding.instance.instantiateImageCodecWithSize(
       buffer,
@@ -343,11 +348,12 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     Duration duration = Duration();
 
     for (int i = 0; i < codec.frameCount; i++) {
+      if (!mounted) { break; }
       FrameInfo frameInfo = await codec.getNextFrame();
       infos.add(ImageInfo(image: frameInfo.image));
       duration += frameInfo.duration;
     }
-
+    print("LMTB-TESTING!!!");
     return GifInfo(frames: infos, duration: duration);
   }
 }
