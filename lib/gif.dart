@@ -373,7 +373,7 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     final bytes = await compute(_fetchFramesBuffer, provider);
 
     // Not resizing here because of issue: https://github.com/flutter/flutter/issues/143311
-    ui.Codec codec = await ui.instantiateImageCodec(
+    final codec = await ui.instantiateImageCodec(
         bytes,
     );
 
@@ -381,8 +381,11 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     Duration duration = Duration();
 
     for (int i = 0; i < codec.frameCount; i++) {
+
+      // Check if widget is still mounted, if not we can break a possible long and heavy loop
       if (!mounted) { break; }
-      ui.FrameInfo frameInfo = await codec.getNextFrame();
+
+      final frameInfo = await codec.getNextFrame();
       final frameImage = frameInfo.image;
       final image = await _resizeUiImage(
           frameImage,
