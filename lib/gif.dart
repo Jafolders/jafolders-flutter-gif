@@ -7,7 +7,7 @@
 
 library gif;
 
-import 'dart:ui';
+import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart';
@@ -62,6 +62,7 @@ class Gif extends StatefulWidget {
 
   final double? width;
   final double? height;
+  final ui.TargetImageSize? targetImageSize;
   final Color? color;
   final BlendMode? colorBlendMode;
   final BoxFit? fit;
@@ -102,6 +103,7 @@ class Gif extends StatefulWidget {
     this.excludeFromSemantics = false,
     this.width,
     this.height,
+    this.targetImageSize,
     this.color,
     this.colorBlendMode,
     this.fit,
@@ -236,6 +238,11 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     if (widget.controller == null) {
       _controller.dispose();
     }
+
+    // Make sure frames are disposed.
+    _frames.forEach((e) => e.image.dispose());
+    _frames.clear();
+
     super.dispose();
   }
 
@@ -314,8 +321,8 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
     });
   }
 
-  /// Fetches the single gif frames and saves them into the [GifCache] of [Gif]
-  static Future<GifInfo> _fetchFrames(ImageProvider provider) async {
+  /// Fetches the single gif frames from storages and parses them to bytes
+  Future<Uint8List> _fetchFramesBytes(ImageProvider provider) async {
     late final Uint8List bytes;
 
     if (provider is NetworkImage) {
@@ -335,19 +342,64 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
       bytes = provider.bytes;
     }
 
-    final buffer = await ImmutableBuffer.fromUint8List(bytes);
-    Codec codec = await PaintingBinding.instance.instantiateImageCodecWithSize(
-      buffer,
+    return bytes;
+  }
+
+  /// Resizes single ui.Images to a certain size
+  Future<ui.Image> _resizeUiImage(ui.Image image, int? targetWidth, int? targetHeight) async {
+    final dstWidth = targetWidth;
+    final dstHeight = targetHeight;
+
+    if (dstWidth == null || dstHeight == null) {
+      return image;
+    }
+
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final paint = ui.Paint();
+    final src = ui.Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final dst = ui.Rect.fromLTWH(0, 0, dstWidth.toDouble(), dstHeight.toDouble());
+
+    canvas.drawImageRect(image, src, dst, paint);
+
+    final picture = recorder.endRecording();
+    final resizedImage = await picture.toImage(dstWidth, dstHeight);
+
+    return resizedImage;
+  }
+
+  /// Fetches the single gif frames and saves them into the [GifCache] of [Gif]
+  Future<GifInfo> _fetchFrames(ImageProvider provider) async {
+    final bytes = await _fetchFramesBytes(provider);
+
+    // Not resizing here because of issue: https://github.com/flutter/flutter/issues/143311
+    final codec = await ui.instantiateImageCodec(
+        bytes,
     );
+
     List<ImageInfo> infos = [];
     Duration duration = Duration();
 
     for (int i = 0; i < codec.frameCount; i++) {
-      FrameInfo frameInfo = await codec.getNextFrame();
-      infos.add(ImageInfo(image: frameInfo.image));
+
+      // Check if widget is still mounted, if not we can break a possible long and heavy loop
+      if (!mounted) { break; }
+
+      final frameInfo = await codec.getNextFrame();
+      final frameImage = frameInfo.image;
+      final image = await _resizeUiImage(
+          frameImage,
+          widget.targetImageSize?.width,
+          widget.targetImageSize?.height
+      );
+      infos.add(ImageInfo(image: image));
       duration += frameInfo.duration;
+      frameImage.dispose();
     }
+
+    codec.dispose();
 
     return GifInfo(frames: infos, duration: duration);
   }
+
 }
