@@ -322,7 +322,7 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
   }
 
   /// Fetches the single gif frames from storages and parses them to bytes
-  static Future<Uint8List> _fetchFramesBuffer(ImageProvider provider) async {
+  static Future<Uint8List> _fetchFramesBytes(ImageProvider provider) async {
     late final Uint8List bytes;
 
     if (provider is NetworkImage) {
@@ -370,7 +370,7 @@ class _GifState extends State<Gif> with SingleTickerProviderStateMixin {
 
   /// Fetches the single gif frames and saves them into the [GifCache] of [Gif]
   Future<GifInfo> _fetchFrames(ImageProvider provider) async {
-    final bytes = await compute(_fetchFramesBuffer, provider);
+    final bytes = await compute(_fetchFramesBytes, provider);
 
     // Not resizing here because of issue: https://github.com/flutter/flutter/issues/143311
     final codec = await ui.instantiateImageCodec(
